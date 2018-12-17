@@ -12,7 +12,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="9edb7e8a-2b9b-403d-8eb5-81af3c2bf2b3" name="Default" comment="">
-      <change beforePath="$PROJECT_DIR$/app/src/main/java/com/photorithm/mediaplayerexample/MediaPlayerService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/com/photorithm/mediaplayerexample/MediaPlayerService.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/java/com/photorithm/mediaplayerexample/MainActivity.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/com/photorithm/mediaplayerexample/MainActivity.kt" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="TRACKING_ENABLED" value="true" />
@@ -45,23 +45,23 @@
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="MainActivity.kt" pinned="false" current-in-tab="false">
+      <file leaf-file-name="MainActivity.kt" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/app/src/main/java/com/photorithm/mediaplayerexample/MainActivity.kt">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="68">
-              <caret line="4" selection-start-line="4" selection-end-line="4" />
+            <state relative-caret-position="464">
+              <caret line="58" column="103" selection-start-line="58" selection-start-column="103" selection-end-line="58" selection-end-column="103" />
               <folding>
-                <element signature="e#43#115#0" expanded="true" />
+                <element signature="e#43#361#0" expanded="true" />
               </folding>
             </state>
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="MediaPlayerService.kt" pinned="false" current-in-tab="true">
+      <file leaf-file-name="MediaPlayerService.kt" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/app/src/main/java/com/photorithm/mediaplayerexample/MediaPlayerService.kt">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="260">
-              <caret line="196" column="9" lean-forward="true" selection-start-line="196" selection-start-column="9" selection-end-line="196" selection-end-column="9" />
+            <state relative-caret-position="209">
+              <caret line="202" column="5" selection-start-line="202" selection-start-column="5" selection-end-line="202" selection-end-column="5" />
               <folding>
                 <element signature="e#43#378#0" expanded="true" />
               </folding>
@@ -2454,8 +2454,8 @@
     <option name="CHANGED_PATHS">
       <list>
         <option value="$PROJECT_DIR$/app/src/main/AndroidManifest.xml" />
-        <option value="$PROJECT_DIR$/app/src/main/java/com/photorithm/mediaplayerexample/MainActivity.kt" />
         <option value="$PROJECT_DIR$/app/src/main/java/com/photorithm/mediaplayerexample/MediaPlayerService.kt" />
+        <option value="$PROJECT_DIR$/app/src/main/java/com/photorithm/mediaplayerexample/MainActivity.kt" />
       </list>
     </option>
   </component>
@@ -2731,22 +2731,22 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/app/src/main/java/com/photorithm/mediaplayerexample/MainActivity.kt">
+    <entry file="file://$PROJECT_DIR$/app/src/main/java/com/photorithm/mediaplayerexample/MediaPlayerService.kt">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="68">
-          <caret line="4" selection-start-line="4" selection-end-line="4" />
+        <state relative-caret-position="209">
+          <caret line="202" column="5" selection-start-line="202" selection-start-column="5" selection-end-line="202" selection-end-column="5" />
           <folding>
-            <element signature="e#43#115#0" expanded="true" />
+            <element signature="e#43#378#0" expanded="true" />
           </folding>
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/app/src/main/java/com/photorithm/mediaplayerexample/MediaPlayerService.kt">
+    <entry file="file://$PROJECT_DIR$/app/src/main/java/com/photorithm/mediaplayerexample/MainActivity.kt">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="260">
-          <caret line="196" column="9" lean-forward="true" selection-start-line="196" selection-start-column="9" selection-end-line="196" selection-end-column="9" />
+        <state relative-caret-position="464">
+          <caret line="58" column="103" selection-start-line="58" selection-start-column="103" selection-end-line="58" selection-end-column="103" />
           <folding>
-            <element signature="e#43#378#0" expanded="true" />
+            <element signature="e#43#361#0" expanded="true" />
           </folding>
         </state>
       </provider>
