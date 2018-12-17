@@ -25,7 +25,7 @@ class MediaPlayerService : Service(), MediaPlayer.OnCompletionListener, MediaPla
     private var audioManager: AudioManager? = null
     private var mediaPlayer: MediaPlayer? = null
     //path to the audio file
-    private val mediaFile: String? = null
+    private var mediaFile: String? = null
 
     private fun initMediaPlayer() {
         mediaPlayer = MediaPlayer()
@@ -179,6 +179,36 @@ class MediaPlayerService : Service(), MediaPlayer.OnCompletionListener, MediaPla
     inner class LocalBinder : Binder() {
         val service: MediaPlayerService
             get() = this@MediaPlayerService
+    }
+
+    //The system calls this method when an activity, requests the service be started
+    override fun onStartCommand(intent: Intent, flags: Int, startId: Int): Int {
+        try {
+            //An audio file is passed to the service through putExtra();
+            mediaFile = intent.extras!!.getString("media")
+        } catch (e: NullPointerException) {
+            stopSelf()
+        }
+
+        //Request audio focus
+        if (!requestAudioFocus()) {
+            //Could not gain focus
+            stopSelf()
+        }
+
+        if (mediaFile != null && mediaFile !== "")
+            initMediaPlayer()
+
+        return super.onStartCommand(intent, flags, startId)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (mediaPlayer != null) {
+            stopMedia()
+            mediaPlayer?.release()
+        }
+        removeAudioFocus()
     }
 
 }
