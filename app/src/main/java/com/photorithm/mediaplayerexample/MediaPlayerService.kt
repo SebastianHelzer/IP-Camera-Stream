@@ -1,6 +1,7 @@
 package com.photorithm.mediaplayerexample
 
 import android.app.Service
+import android.content.Context
 import android.media.MediaPlayer
 import android.content.Intent
 import android.os.IBinder
@@ -8,6 +9,10 @@ import android.media.AudioManager
 import android.os.Binder
 import android.util.Log
 import java.io.IOException
+import android.content.Context.AUDIO_SERVICE
+import android.support.v4.content.ContextCompat.getSystemService
+
+
 
 
 /*
@@ -17,6 +22,7 @@ class MediaPlayerService : Service(), MediaPlayer.OnCompletionListener, MediaPla
     MediaPlayer.OnErrorListener, MediaPlayer.OnSeekCompleteListener, MediaPlayer.OnInfoListener,
     MediaPlayer.OnBufferingUpdateListener, AudioManager.OnAudioFocusChangeListener {
 
+    private var audioManager: AudioManager? = null
     private var mediaPlayer: MediaPlayer? = null
     //path to the audio file
     private val mediaFile: String? = null
@@ -129,8 +135,45 @@ class MediaPlayerService : Service(), MediaPlayer.OnCompletionListener, MediaPla
         //Invoked indicating the completion of a seek operation.
     }
 
-    override fun onAudioFocusChange(focusChange: Int) {
+    override fun onAudioFocusChange(focusState: Int) {
         //Invoked when the audio focus of the system is updated.
+        when (focusState) {
+            AudioManager.AUDIOFOCUS_GAIN -> {
+                // resume playback
+                if (mediaPlayer == null)
+                    initMediaPlayer()
+                else if (!mediaPlayer!!.isPlaying) mediaPlayer!!.start()
+                mediaPlayer?.setVolume(1.0f, 1.0f)
+            }
+            AudioManager.AUDIOFOCUS_LOSS -> {
+                // Lost focus for an unbounded amount of time: stop playback and release media player
+                if(mediaPlayer != null) {
+                    if (mediaPlayer!!.isPlaying) mediaPlayer!!.stop()
+                    mediaPlayer!!.release()
+                }
+                mediaPlayer = null
+            }
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT ->
+                // Lost focus for a short time, but we have to stop
+                // playback. We don't release the media player because playback
+                // is likely to resume
+                if (mediaPlayer != null && mediaPlayer!!.isPlaying) mediaPlayer!!.pause()
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK ->
+                // Lost focus for a short time, but it's ok to keep playing
+                // at an attenuated level
+                if (mediaPlayer != null && mediaPlayer!!.isPlaying) mediaPlayer!!.setVolume(0.1f, 0.1f)
+        }
+    }
+
+    private fun requestAudioFocus(): Boolean {
+        audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val result = audioManager?.requestAudioFocus(this, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN)
+        return result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        //Could not gain focus
+    }
+
+    private fun removeAudioFocus(): Boolean {
+        return AudioManager.AUDIOFOCUS_REQUEST_GRANTED == audioManager?.abandonAudioFocus(this)
     }
 
     inner class LocalBinder : Binder() {
