@@ -45,6 +45,25 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    public override fun onSaveInstanceState(savedInstanceState: Bundle) {
+        savedInstanceState.putBoolean("ServiceState", serviceBound)
+        super.onSaveInstanceState(savedInstanceState)
+    }
+
+    public override fun onRestoreInstanceState(savedInstanceState: Bundle) {
+        super.onRestoreInstanceState(savedInstanceState)
+        serviceBound = savedInstanceState.getBoolean("ServiceState")
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (serviceBound) {
+            unbindService(serviceConnection)
+            //service is active
+            player?.stopSelf()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
