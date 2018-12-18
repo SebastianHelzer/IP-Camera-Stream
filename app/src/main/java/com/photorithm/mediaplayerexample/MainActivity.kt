@@ -1,24 +1,24 @@
 package com.photorithm.mediaplayerexample
 
 import android.Manifest
-import android.support.v7.app.AppCompatActivity
-import android.os.Bundle
+import android.annotation.SuppressLint
 import android.content.ComponentName
 import android.content.Context
-import android.widget.Toast
-import android.os.IBinder
-import android.content.ServiceConnection
 import android.content.Intent
-import android.provider.MediaStore
+import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Bundle
+import android.os.IBinder
+import android.provider.MediaStore
+import android.support.v7.app.AppCompatActivity
 import android.support.v7.widget.GridLayoutManager
 import android.support.v7.widget.RecyclerView
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import android.widget.Toast
 import kotlinx.android.synthetic.main.activity_main.*
-import org.w3c.dom.Text
 
 
 class MainActivity : AppCompatActivity() {
@@ -28,8 +28,8 @@ class MainActivity : AppCompatActivity() {
     private var player: MediaPlayerService? = null
     var serviceBound = false
     var audioList: ArrayList<Audio>? = null
-    private val MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE = 50000
 
+    @SuppressLint("Recycle")
     private fun loadAudio() {
 
 
@@ -136,9 +136,9 @@ class MainActivity : AppCompatActivity() {
 
     class MyViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         val rootView = itemView
-        val titleView = itemView.findViewById<TextView>(R.id.title_text)
-        val albumView = itemView.findViewById<TextView>(R.id.album_title)
-        val artistView = itemView.findViewById<TextView>(R.id.artist_text)
+        val titleView = itemView.findViewById<TextView>(R.id.title_text)!!
+        val albumView = itemView.findViewById<TextView>(R.id.album_title)!!
+        val artistView = itemView.findViewById<TextView>(R.id.artist_text)!!
     }
 
     private fun checkIfCanLoadAudio() {
@@ -152,7 +152,7 @@ class MainActivity : AppCompatActivity() {
                 requestPermissions(
                     arrayOf( Manifest.permission.READ_EXTERNAL_STORAGE),
                     MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE
-                );
+                )
             } else {
                 loadAudio()
             }
@@ -170,6 +170,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     companion object {
-        val Broadcast_PLAY_NEW_AUDIO = "com.photorithm.mediaplayerexample.PlayNewAudio"
+        const val Broadcast_PLAY_NEW_AUDIO = "com.photorithm.mediaplayerexample.PlayNewAudio"
+        private const val MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE = 50000
     }
 }
