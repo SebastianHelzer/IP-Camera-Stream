@@ -30,7 +30,6 @@ class MainActivity : AppCompatActivity() {
     var audioList: ArrayList<Audio>? = null
     private val MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE = 50000
 
-
     private fun loadAudio() {
 
 
@@ -71,16 +70,26 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun playAudio(media: String) {
+    private fun playAudio(audioIndex: Int) {
         //Check is service is active
         if (!serviceBound) {
+            //Store Serializable audioList to SharedPreferences
+            if(audioList != null) {
+                val storage = StorageUtil(applicationContext)
+                storage.storeAudio(audioList!!)
+                storage.storeAudioIndex(audioIndex)
+            }
             val playerIntent = Intent(this, MediaPlayerService::class.java)
-            playerIntent.putExtra("media", media)
             startService(playerIntent)
             bindService(playerIntent, serviceConnection, Context.BIND_AUTO_CREATE)
         } else {
+            //Store the new audioIndex to SharedPreferences
+            val storage = StorageUtil(applicationContext)
+            storage.storeAudioIndex(audioIndex)
+
             //Service is active
-            //Send media with BroadcastReceiver
+            //Send a broadcast to the service -> PLAY_NEW_AUDIO
+            sendBroadcast(Intent(Broadcast_PLAY_NEW_AUDIO))
         }
     }
 
@@ -107,12 +116,6 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         checkIfCanLoadAudio()
-        //play the first audio in the ArrayList
-        if (audioList != null && audioList!!.isNotEmpty()) {
-//            playAudio(audioList!![0].data!!)
-        } else {
-            playAudio("https://upload.wikimedia.org/wikipedia/commons/6/6c/Grieg_Lyric_Pieces_Kobold.ogg")
-        }
 
         recycler_view.layoutManager = GridLayoutManager(this,1)
         recycler_view.adapter = object : RecyclerView.Adapter<MyViewHolder>(){
@@ -126,8 +129,7 @@ class MainActivity : AppCompatActivity() {
                 p0.albumView.text = audioList!![p1].album
                 p0.artistView.text = audioList!![p1].data
                 p0.titleView.text = audioList!![p1].title
-                p0.rootView.setOnClickListener { playAudio(audioList!![p1].data!!) }
-
+                p0.rootView.setOnClickListener { playAudio(p1) }
             }
         }
     }
@@ -165,5 +167,9 @@ class MainActivity : AppCompatActivity() {
                 loadAudio()
             }
         }
+    }
+
+    companion object {
+        val Broadcast_PLAY_NEW_AUDIO = "com.photorithm.mediaplayerexample.PlayNewAudio"
     }
 }
