@@ -7,9 +7,10 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.BitmapFactory
 import android.graphics.drawable.Icon
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaMetadata
-import android.media.MediaPlayer
 import android.media.session.MediaController
 import android.media.session.MediaSession
 import android.media.session.MediaSessionManager
@@ -20,95 +21,97 @@ import android.os.RemoteException
 import android.telephony.PhoneStateListener
 import android.telephony.TelephonyManager
 import android.util.Log
-import java.io.IOException
+import veg.mediaplayer.sdk.MediaPlayerConfig
+import java.nio.ByteBuffer
 import android.support.v4.media.app.NotificationCompat as MediaNotificationCompat
-import android.media.AudioFocusRequest
-import android.media.AudioAttributes
 
 
 /*
  * Created by Sebastian Helzer on 12/17/2018.
  */
-class MediaPlayerService : Service(), MediaPlayer.OnCompletionListener, MediaPlayer.OnPreparedListener,
-    MediaPlayer.OnErrorListener, MediaPlayer.OnSeekCompleteListener, MediaPlayer.OnInfoListener,
-    MediaPlayer.OnBufferingUpdateListener, AudioManager.OnAudioFocusChangeListener {
+class MediaPlayerService : Service(), AudioManager.OnAudioFocusChangeListener {
 
     private var audioManager: AudioManager? = null
-    private var mediaPlayer: MediaPlayer? = null
+    private var mediaPlayer: veg.mediaplayer.sdk.MediaPlayer? = null
+    private val rtspURL = "rtsp://admin:" + "admin@192.168.0.104/live0.264"
     //Handle incoming phone calls
     private var ongoingCall = false
     private var phoneStateListener: PhoneStateListener? = null
     private var telephonyManager: TelephonyManager? = null
-    //List of available Audio files
-    private var audioList: ArrayList<Audio>? = null
-    private var audioIndex = -1
-    private var activeAudio: Audio? = null //an object of the currently playing audio
-
     //MediaSession
     private var mediaSessionManager: MediaSessionManager? = null
     private var mediaSession: MediaSession? = null
     private var transportControls: MediaController.TransportControls? = null
 
     private fun initMediaPlayer() {
-        mediaPlayer = MediaPlayer()
-        //Set up MediaPlayer event listeners
-        mediaPlayer?.setOnCompletionListener(this)
-        mediaPlayer?.setOnErrorListener(this)
-        mediaPlayer?.setOnPreparedListener(this)
-        mediaPlayer?.setOnBufferingUpdateListener(this)
-        mediaPlayer?.setOnSeekCompleteListener(this)
-        mediaPlayer?.setOnInfoListener(this)
-        //Reset so that the MediaPlayer is not pointing to another data source
-        mediaPlayer?.reset()
-        try {
-            // Set the data source to the mediaFile location
-            if(activeAudio != null) {
-                Log.d("MediaPlayerService","Active audio is ${activeAudio!!.data}")
-                mediaPlayer?.setDataSource(activeAudio!!.data)
-                mediaPlayer?.prepareAsync()
-            } else {
-                Log.d("MediaPlayerService","Active audio is null")
-            }
-        } catch (e: IOException) {
-            e.printStackTrace()
-            stopSelf()
-        }
-
+        mediaPlayer = veg.mediaplayer.sdk.MediaPlayer(this, false)
+        playMedia()
     }
 
-    //Used to pause/resume MediaPlayer
-    private var resumePosition: Int = 0
+    private fun getConfig(rtspURL: String): MediaPlayerConfig{
+        val config = MediaPlayerConfig()
+        config.connectionUrl = rtspURL
+        config.connectionNetworkProtocol = 1
+        config.connectionDetectionTime = 500
+        config.connectionBufferingSize = 200 //200
+        config.connectionBufferingTime = 100 //100
+        config.connectionBufferingType = 1 //1
+        config.dataReceiveTimeout = 5000
+        config.decodingType = 1
+        config.rendererType = 1
+        config.synchroEnable = 1 //1
+        config.synchroNeedDropVideoFrames = 1
+        config.enableColorVideo = 1
+        config.aspectRatioMode = 1
+        config.numberOfCPUCores = 0
+        config.enableAudio = 1
+        config.useNotchFilter = 0 //0
+        config.volumeBoost = 1
+        config.fadeOnChangeFFSpeed = 0
+        config.setMode(veg.mediaplayer.sdk.MediaPlayer.PlayerModes.PP_MODE_AUDIO)
+        return config
+    }
 
     private fun playMedia() {
         if(mediaPlayer != null) {
-            if (!mediaPlayer!!.isPlaying) {
-                mediaPlayer!!.start()
+            if (mediaPlayer!!.state != veg.mediaplayer.sdk.MediaPlayer.PlayerState.Opened) {
+                mediaPlayer!!.Open(getConfig(rtspURL),
+                    object : veg.mediaplayer.sdk.MediaPlayer.MediaPlayerCallback {
+                        override fun OnReceiveData(p0: ByteBuffer?, p1: Int, p2: Long): Int {
+                            Log.d("MainActivity", "OnReceiveData: $p0 $p1 $p2")
+                            return 0
+                        }
+
+                        override fun Status(p0: Int): Int {
+                            Log.d("MainActivity", "Status: $p0")
+                            return 0
+                        }
+                    })
+                buildNotification(PlaybackStatus.PLAYING)
             }
         }
     }
 
     private fun stopMedia() {
         if (mediaPlayer != null) {
-            if (mediaPlayer!!.isPlaying) {
-                mediaPlayer!!.stop()
+            if (mediaPlayer!!.state == veg.mediaplayer.sdk.MediaPlayer.PlayerState.Opened) {
+                mediaPlayer!!.Close()
             }
         }
     }
 
     private fun pauseMedia() {
         if (mediaPlayer != null) {
-            if (mediaPlayer!!.isPlaying) {
-                mediaPlayer!!.pause()
-                resumePosition = mediaPlayer!!.currentPosition
+            if (mediaPlayer!!.state != veg.mediaplayer.sdk.MediaPlayer.PlayerState.Paused) {
+                mediaPlayer!!.Pause()
             }
         }
     }
 
     private fun resumeMedia() {
         if (mediaPlayer != null) {
-            if (!mediaPlayer!!.isPlaying) {
-                mediaPlayer!!.seekTo(resumePosition)
-                mediaPlayer!!.start()
+            if (mediaPlayer!!.state == veg.mediaplayer.sdk.MediaPlayer.PlayerState.Paused) {
+                mediaPlayer!!.Play()
             }
         }
     }
@@ -120,44 +123,8 @@ class MediaPlayerService : Service(), MediaPlayer.OnCompletionListener, MediaPla
         return iBinder
     }
 
-    override fun onBufferingUpdate(mp: MediaPlayer, percent: Int) {
-        //Invoked indicating buffering status of
-        //a media resource being streamed over the network.
-    }
-
-    override fun onCompletion(mp: MediaPlayer) {
-        //Invoked when playback of a media source has completed.
-        stopMedia()
-        //stop the service
-        stopSelf()
-    }
-
-    //Handle errors
-    override fun onError(mp: MediaPlayer, what: Int, extra: Int): Boolean {
-        //Invoked when there has been an error during an asynchronous operation
-        when (what) {
-            MediaPlayer.MEDIA_ERROR_NOT_VALID_FOR_PROGRESSIVE_PLAYBACK -> Log.d(
-                "MediaPlayer Error",
-                "MEDIA ERROR NOT VALID FOR PROGRESSIVE PLAYBACK $extra"
-            )
-            MediaPlayer.MEDIA_ERROR_SERVER_DIED -> Log.d("MediaPlayer Error", "MEDIA ERROR SERVER DIED $extra")
-            MediaPlayer.MEDIA_ERROR_UNKNOWN -> Log.d("MediaPlayer Error", "MEDIA ERROR UNKNOWN $extra")
-        }
-        return false
-    }
-
-    override fun onInfo(mp: MediaPlayer, what: Int, extra: Int): Boolean {
-        //Invoked to communicate some info.
-        return false
-    }
-
-    override fun onPrepared(mp: MediaPlayer) {
-        //Invoked when the media source is ready for playback.
-        playMedia()
-    }
-
-    override fun onSeekComplete(mp: MediaPlayer) {
-        //Invoked indicating the completion of a seek operation.
+    private fun veg.mediaplayer.sdk.MediaPlayer.isPlaying(): Boolean{
+        return this.state == veg.mediaplayer.sdk.MediaPlayer.PlayerState.Started
     }
 
     override fun onAudioFocusChange(focusState: Int) {
@@ -167,14 +134,12 @@ class MediaPlayerService : Service(), MediaPlayer.OnCompletionListener, MediaPla
                 // resume playback
                 if (mediaPlayer == null)
                     initMediaPlayer()
-                else if (!mediaPlayer!!.isPlaying) mediaPlayer!!.start()
-                mediaPlayer?.setVolume(1.0f, 1.0f)
+                else if (!mediaPlayer!!.isPlaying()) mediaPlayer!!.Play()
             }
             AudioManager.AUDIOFOCUS_LOSS -> {
                 // Lost focus for an unbounded amount of time: stop playback and release media player
                 if(mediaPlayer != null) {
-                    if (mediaPlayer!!.isPlaying) mediaPlayer!!.stop()
-                    mediaPlayer!!.release()
+                    if (mediaPlayer!!.isPlaying()) mediaPlayer!!.Close()
                 }
                 mediaPlayer = null
             }
@@ -182,11 +147,11 @@ class MediaPlayerService : Service(), MediaPlayer.OnCompletionListener, MediaPla
                 // Lost focus for a short time, but we have to stop
                 // playback. We don't release the media player because playback
                 // is likely to resume
-                if (mediaPlayer != null && mediaPlayer!!.isPlaying) mediaPlayer!!.pause()
+                if (mediaPlayer != null && mediaPlayer!!.isPlaying()) mediaPlayer!!.Pause()
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK ->
                 // Lost focus for a short time, but it's ok to keep playing
                 // at an attenuated level
-                if (mediaPlayer != null && mediaPlayer!!.isPlaying) mediaPlayer!!.setVolume(0.1f, 0.1f)
+                if (mediaPlayer != null && mediaPlayer!!.isPlaying()) mediaPlayer!!.setVolumeBoost(0)
         }
     }
 
@@ -240,8 +205,6 @@ class MediaPlayerService : Service(), MediaPlayer.OnCompletionListener, MediaPla
         registerBecomingNoisyReceiver()
         //Listen for new Audio to play -- BroadcastReceiver
         registerPlayNewAudio()
-
-        audioList = StorageUtil(this).loadAudio()
     }
 
     //The system calls this method when an activity, requests the service be started
@@ -251,7 +214,6 @@ class MediaPlayerService : Service(), MediaPlayer.OnCompletionListener, MediaPla
             //Could not gain focus
             stopSelf()
         }
-        getNewIndex()
 
         if (mediaSessionManager == null) {
             try {
@@ -274,7 +236,7 @@ class MediaPlayerService : Service(), MediaPlayer.OnCompletionListener, MediaPla
         super.onDestroy()
         if (mediaPlayer != null) {
             stopMedia()
-            mediaPlayer?.release()
+            mediaPlayer?.Close()
         }
         removeAudioFocus()
         //Disable the PhoneStateListener
@@ -339,28 +301,14 @@ class MediaPlayerService : Service(), MediaPlayer.OnCompletionListener, MediaPla
         )
     }
 
-    fun getNewIndex(){
-        audioIndex = StorageUtil(applicationContext).loadAudioIndex()
-        if (audioIndex != -1 && audioList != null && audioIndex < audioList!!.size) {
-            //index is in a valid range
-            activeAudio = audioList!![audioIndex]
-        } else {
-            stopSelf()
-        }
-    }
-
     private val playNewAudio = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-
-            getNewIndex()
-
             //A PLAY_NEW_AUDIO action received
             //reset mediaPlayer to play the new Audio
             stopMedia()
-            mediaPlayer?.reset()
             initMediaPlayer()
-//            updateMetaData()
-//            buildNotification(PlaybackStatus.PLAYING)
+            updateMetaData()
+            buildNotification(PlaybackStatus.PLAYING)
         }
     }
 
@@ -439,51 +387,19 @@ class MediaPlayerService : Service(), MediaPlayer.OnCompletionListener, MediaPla
         mediaSession!!.setMetadata(
             MediaMetadata.Builder()
                 .putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, albumArt)
-                .putString(MediaMetadata.METADATA_KEY_ARTIST, activeAudio!!.artist)
-                .putString(MediaMetadata.METADATA_KEY_ALBUM, activeAudio!!.album)
-                .putString(MediaMetadata.METADATA_KEY_TITLE, activeAudio!!.title)
                 .build()
         )
     }
 
     private fun skipToNext() {
-
-        if (audioIndex == audioList!!.size - 1) {
-            //if last in playlist
-            audioIndex = 0
-            activeAudio = audioList!![audioIndex]
-        } else {
-            //get next in playlist
-            activeAudio = audioList!![++audioIndex]
-        }
-
-        //Update stored index
-        StorageUtil(applicationContext).storeAudioIndex(audioIndex)
-
         stopMedia()
         //reset mediaPlayer
-        mediaPlayer!!.reset()
         initMediaPlayer()
     }
 
     private fun skipToPrevious() {
-
-        if (audioIndex == 0) {
-            //if first in playlist
-            //set index to the last of audioList
-            audioIndex = audioList!!.size- 1
-            activeAudio = audioList!![audioIndex]
-        } else {
-            //get previous in playlist
-            activeAudio = audioList!![--audioIndex]
-        }
-
-        //Update stored index
-        StorageUtil(applicationContext).storeAudioIndex(audioIndex)
-
         stopMedia()
         //reset mediaPlayer
-        mediaPlayer!!.reset()
         initMediaPlayer()
     }
 
@@ -539,8 +455,6 @@ class MediaPlayerService : Service(), MediaPlayer.OnCompletionListener, MediaPla
             .setLargeIcon(largeIcon)
             .setSmallIcon(android.R.drawable.stat_sys_headset)
             // Set Notification content information
-            .setContentText(activeAudio!!.artist)
-            .setContentTitle(activeAudio!!.title)
             // Add playback actions
             .addAction(prevAction.build())
             .addAction(playPauseActionBuilder.build())
