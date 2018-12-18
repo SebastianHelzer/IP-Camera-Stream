@@ -11,7 +11,6 @@ import com.google.gson.reflect.TypeToken
  */
 class StorageUtil(private val context: Context) {
 
-    private val STORAGE = "com.photorithm.mediaplayerexample.STORAGE"
     private var preferences: SharedPreferences? = null
 
     fun storeAudio(arrayList: ArrayList<Audio>) {
@@ -40,5 +39,9 @@ class StorageUtil(private val context: Context) {
 
     fun clearCachedAudioPlaylist() {
         context.getSharedPreferences(STORAGE, Context.MODE_PRIVATE).edit().clear().apply()
+    }
+
+    companion object {
+        private const val STORAGE = "com.photorithm.mediaplayerexample.STORAGE"
     }
 }

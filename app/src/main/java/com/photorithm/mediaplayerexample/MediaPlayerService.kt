@@ -1,10 +1,12 @@
 package com.photorithm.mediaplayerexample
 
+import android.app.*
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.BitmapFactory
+import android.graphics.drawable.Icon
 import android.media.AudioManager
 import android.media.MediaMetadata
 import android.media.MediaPlayer
@@ -12,22 +14,16 @@ import android.media.session.MediaController
 import android.media.session.MediaSession
 import android.media.session.MediaSessionManager
 import android.os.Binder
+import android.os.Build
 import android.os.IBinder
 import android.os.RemoteException
 import android.telephony.PhoneStateListener
 import android.telephony.TelephonyManager
 import android.util.Log
 import java.io.IOException
-import android.R.string.cancel
-import android.app.*
-import android.support.v4.app.NotificationCompat
-import android.app.Notification.MediaStyle
-import android.graphics.Bitmap
-import com.photorithm.mediaplayerexample.MediaPlayerService.PlaybackStatus
-import android.os.Build
-import android.support.v4.content.ContextCompat.getSystemService
 import android.support.v4.media.app.NotificationCompat as MediaNotificationCompat
-
+import android.media.AudioFocusRequest
+import android.media.AudioAttributes
 
 
 /*
@@ -39,8 +35,6 @@ class MediaPlayerService : Service(), MediaPlayer.OnCompletionListener, MediaPla
 
     private var audioManager: AudioManager? = null
     private var mediaPlayer: MediaPlayer? = null
-    //path to the audio file
-    private var mediaFile: String? = null
     //Handle incoming phone calls
     private var ongoingCall = false
     private var phoneStateListener: PhoneStateListener? = null
@@ -49,20 +43,11 @@ class MediaPlayerService : Service(), MediaPlayer.OnCompletionListener, MediaPla
     private var audioList: ArrayList<Audio>? = null
     private var audioIndex = -1
     private var activeAudio: Audio? = null //an object of the currently playing audio
-    // Media session controls
-    val ACTION_PLAY = "com.photorithm.mediaplayerexample.ACTION_PLAY"
-    val ACTION_PAUSE = "com.photorithm.mediaplayerexample.ACTION_PAUSE"
-    val ACTION_PREVIOUS = "com.photorithm.mediaplayerexample.ACTION_PREVIOUS"
-    val ACTION_NEXT = "com.photorithm.mediaplayerexample.ACTION_NEXT"
-    val ACTION_STOP = "com.photorithm.mediaplayerexample.ACTION_STOP"
 
     //MediaSession
     private var mediaSessionManager: MediaSessionManager? = null
     private var mediaSession: MediaSession? = null
     private var transportControls: MediaController.TransportControls? = null
-
-    //AudioPlayer notification ID
-    private val NOTIFICATION_ID = 101
 
     private fun initMediaPlayer() {
         mediaPlayer = MediaPlayer()
@@ -114,7 +99,7 @@ class MediaPlayerService : Service(), MediaPlayer.OnCompletionListener, MediaPla
         if (mediaPlayer != null) {
             if (mediaPlayer!!.isPlaying) {
                 mediaPlayer!!.pause()
-                resumePosition = mediaPlayer!!.getCurrentPosition()
+                resumePosition = mediaPlayer!!.currentPosition
             }
         }
     }
@@ -205,16 +190,38 @@ class MediaPlayerService : Service(), MediaPlayer.OnCompletionListener, MediaPla
         }
     }
 
+    private var mFocusRequest: AudioFocusRequest? = null
+
     private fun requestAudioFocus(): Boolean {
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        val result = audioManager?.requestAudioFocus(this, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN)
-        return result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        val mPlaybackAttributes = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_MEDIA)
+            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+            .build()
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            mFocusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(mPlaybackAttributes)
+                .setAcceptsDelayedFocusGain(true)
+                .setWillPauseWhenDucked(true)
+                .setOnAudioFocusChangeListener(this)
+                .build()
+            val result = audioManager?.requestAudioFocus(mFocusRequest!!)
+            result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        } else {
+            @Suppress("DEPRECATION")
+            val result = audioManager?.requestAudioFocus(this, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN)
+            result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        }
         //Could not gain focus
     }
 
-    private fun removeAudioFocus(): Boolean {
-        return AudioManager.AUDIOFOCUS_REQUEST_GRANTED == audioManager?.abandonAudioFocus(this)
-    }
+    @Suppress("DEPRECATION")
+    private fun removeAudioFocus(): Boolean =
+        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && mFocusRequest != null) {
+            AudioManager.AUDIOFOCUS_REQUEST_GRANTED == audioManager?.abandonAudioFocusRequest(mFocusRequest!!)
+        } else {
+            AudioManager.AUDIOFOCUS_REQUEST_GRANTED == audioManager?.abandonAudioFocus(this)
+        }
 
     inner class LocalBinder : Binder() {
         val service: MediaPlayerService
@@ -228,11 +235,11 @@ class MediaPlayerService : Service(), MediaPlayer.OnCompletionListener, MediaPla
         // Manage incoming phone calls during playback.
         // Pause MediaPlayer on incoming call,
         // Resume on hangup.
-        callStateListener();
+        callStateListener()
         //ACTION_AUDIO_BECOMING_NOISY -- change in audio outputs -- BroadcastReceiver
-        registerBecomingNoisyReceiver();
+        registerBecomingNoisyReceiver()
         //Listen for new Audio to play -- BroadcastReceiver
-        registerPlayNewAudio();
+        registerPlayNewAudio()
 
         audioList = StorageUtil(this).loadAudio()
     }
@@ -242,23 +249,23 @@ class MediaPlayerService : Service(), MediaPlayer.OnCompletionListener, MediaPla
         //Request audio focus
         if (!requestAudioFocus()) {
             //Could not gain focus
-            stopSelf();
+            stopSelf()
         }
         getNewIndex()
 
         if (mediaSessionManager == null) {
             try {
-                initMediaSession();
-                initMediaPlayer();
+                initMediaSession()
+                initMediaPlayer()
             } catch (e: RemoteException) {
-                e.printStackTrace();
-                stopSelf();
+                e.printStackTrace()
+                stopSelf()
             }
-            buildNotification(PlaybackStatus.PLAYING);
+            buildNotification(PlaybackStatus.PLAYING)
         }
 
         //Handle Intent action from MediaSession.TransportControls
-        handleIncomingActions(intent);
+        handleIncomingActions(intent)
 
         return super.onStartCommand(intent, flags, startId)
     }
@@ -371,12 +378,15 @@ class MediaPlayerService : Service(), MediaPlayer.OnCompletionListener, MediaPla
         // Create a new MediaSession
         mediaSession = MediaSession(applicationContext, "AudioPlayer")
         //Get MediaSessions transport controls
-        transportControls = mediaSession!!.getController().transportControls
+        transportControls = mediaSession!!.controller.transportControls
         //set MediaSession -> ready to receive media commands
-        mediaSession!!.setActive(true)
+        mediaSession!!.isActive = true
         //indicate that the MediaSession handles transport control commands
         // through its MediaSessionCompat.Callback.
-        mediaSession!!.setFlags(MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS)
+        if(Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            @Suppress("DEPRECATION")
+            mediaSession!!.setFlags(MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS)
+        }
 
         //Set mediaSession's MetaData
         updateMetaData()
@@ -417,9 +427,6 @@ class MediaPlayerService : Service(), MediaPlayer.OnCompletionListener, MediaPla
                 stopSelf()
             }
 
-            override fun onSeekTo(position: Long) {
-                super.onSeekTo(position)
-            }
         })
     }
 
@@ -488,27 +495,39 @@ class MediaPlayerService : Service(), MediaPlayer.OnCompletionListener, MediaPla
     private fun buildNotification(playbackStatus: PlaybackStatus) {
 
         var notificationAction = android.R.drawable.ic_media_pause//needs to be initialized
-        var play_pauseAction: PendingIntent? = null
+        var playPauseAction: PendingIntent? = null
 
         //Build a new notification according to the current state of the MediaPlayer
         if (playbackStatus === PlaybackStatus.PLAYING) {
             notificationAction = android.R.drawable.ic_media_pause
             //create the pause action
-            play_pauseAction = playbackAction(1)
+            playPauseAction = playbackAction(1)
         } else if (playbackStatus === PlaybackStatus.PAUSED) {
             notificationAction = android.R.drawable.ic_media_play
             //create the play action
-            play_pauseAction = playbackAction(0)
+            playPauseAction = playbackAction(0)
         }
 
         val largeIcon = BitmapFactory.decodeResource(
             resources,
             R.drawable.ic_launcher_foreground
         ) //replace with your own image
+        val channelID = "Default Channel ID"
 
         // Create a new Notification
-        val notificationBuilder = Notification.Builder(this)
+        val notificationBuilder = if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(this,channelID)
+        } else {
+            @Suppress("DEPRECATION") Notification.Builder(this)
+        }
+
+        val prevAction = getNotificationAction(android.R.drawable.ic_media_previous,"previous",playbackAction(3))
+        val playPauseActionBuilder = getNotificationAction(notificationAction,"pause",playPauseAction)
+        val nextAction = getNotificationAction(android.R.drawable.ic_media_next,"next",playbackAction(2))
+
+        notificationBuilder
             .setShowWhen(false)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
             // Set the Notification style
             .setStyle(Notification.MediaStyle()
                     // Attach our MediaSession token
@@ -516,25 +535,28 @@ class MediaPlayerService : Service(), MediaPlayer.OnCompletionListener, MediaPla
                     // Show our playback controls in the compact notification view.
                     .setShowActionsInCompactView(0, 1, 2)
             )
-            // Set the Notification color
-            .setColor(resources.getColor(R.color.colorPrimary))
             // Set the large and small icons
             .setLargeIcon(largeIcon)
             .setSmallIcon(android.R.drawable.stat_sys_headset)
             // Set Notification content information
             .setContentText(activeAudio!!.artist)
-            .setContentTitle(activeAudio!!.album)
-            .setContentInfo(activeAudio!!.title)
+            .setContentTitle(activeAudio!!.title)
             // Add playback actions
-            .addAction(android.R.drawable.ic_media_previous, "previous", playbackAction(3))
-            .addAction(notificationAction, "pause", play_pauseAction)
-            .addAction(android.R.drawable.ic_media_next, "next", playbackAction(2)) as Notification.Builder
+            .addAction(prevAction.build())
+            .addAction(playPauseActionBuilder.build())
+            .addAction(nextAction.build()) as Notification.Builder
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            notificationBuilder.setColor(resources.getColor(R.color.colorAccent,null))
+        } else {
+            @Suppress("DEPRECATION")
+            notificationBuilder.setColor(resources.getColor(R.color.colorAccent))
+        }
 
 
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channelID = "Default Channel ID"
             notificationManager.createNotificationChannel(NotificationChannel(channelID,
                 "Default",NotificationManager.IMPORTANCE_LOW))
             notificationBuilder.setChannelId(channelID)
@@ -543,6 +565,15 @@ class MediaPlayerService : Service(), MediaPlayer.OnCompletionListener, MediaPla
         notificationManager.notify(NOTIFICATION_ID,notificationBuilder.build())
 
 
+    }
+
+    private fun getNotificationAction(drawable: Int, title: CharSequence, action: PendingIntent?): Notification.Action.Builder {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Notification.Action.Builder(Icon.createWithResource(this,drawable),title,action)
+        } else {
+            @Suppress("DEPRECATION")
+            Notification.Action.Builder(drawable,title,action)
+        }
     }
 
     private fun removeNotification() {
@@ -563,7 +594,7 @@ class MediaPlayerService : Service(), MediaPlayer.OnCompletionListener, MediaPla
     }
 
     private fun handleIncomingActions(playbackAction: Intent?) {
-        if (playbackAction?.action == null) return;
+        if (playbackAction?.action == null) return
         when (playbackAction.action!!) {
             ACTION_PLAY -> transportControls!!.play()
             ACTION_PAUSE -> transportControls!!.pause()
@@ -571,6 +602,17 @@ class MediaPlayerService : Service(), MediaPlayer.OnCompletionListener, MediaPla
             ACTION_PREVIOUS -> transportControls!!.skipToPrevious()
             ACTION_STOP -> transportControls!!.stop()
         }
+    }
+
+    companion object {
+        // Media session controls
+        private const val ACTION_PLAY = "com.photorithm.mediaplayerexample.ACTION_PLAY"
+        private const val ACTION_PAUSE = "com.photorithm.mediaplayerexample.ACTION_PAUSE"
+        private const val ACTION_PREVIOUS = "com.photorithm.mediaplayerexample.ACTION_PREVIOUS"
+        private const val ACTION_NEXT = "com.photorithm.mediaplayerexample.ACTION_NEXT"
+        private const val ACTION_STOP = "com.photorithm.mediaplayerexample.ACTION_STOP"
+        //AudioPlayer notification ID
+        private const val NOTIFICATION_ID = 101
     }
 
 }
