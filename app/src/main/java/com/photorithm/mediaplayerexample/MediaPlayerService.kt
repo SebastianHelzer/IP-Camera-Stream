@@ -6,18 +6,21 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.BitmapFactory
-import android.graphics.drawable.Icon
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
-import android.media.MediaMetadata
-import android.media.session.MediaController
 import android.media.session.MediaSession
 import android.media.session.MediaSessionManager
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import android.os.RemoteException
+import android.support.v4.app.NotificationCompat
+import android.support.v4.media.MediaMetadataCompat
+import android.support.v4.media.session.MediaButtonReceiver
+import android.support.v4.media.session.MediaControllerCompat
+import android.support.v4.media.session.MediaSessionCompat
+import android.support.v4.media.session.PlaybackStateCompat
 import android.telephony.PhoneStateListener
 import android.telephony.TelephonyManager
 import android.util.Log
@@ -40,8 +43,8 @@ class MediaPlayerService : Service(), AudioManager.OnAudioFocusChangeListener {
     private var telephonyManager: TelephonyManager? = null
     //MediaSession
     private var mediaSessionManager: MediaSessionManager? = null
-    private var mediaSession: MediaSession? = null
-    private var transportControls: MediaController.TransportControls? = null
+    private var mediaSession: MediaSessionCompat? = null
+    private var transportControls: MediaControllerCompat.TransportControls? = null
 
     private fun initMediaPlayer() {
         mediaPlayer = veg.mediaplayer.sdk.MediaPlayer(this, false)
@@ -94,7 +97,7 @@ class MediaPlayerService : Service(), AudioManager.OnAudioFocusChangeListener {
 
     private fun stopMedia() {
         if (mediaPlayer != null) {
-            if (mediaPlayer!!.state == veg.mediaplayer.sdk.MediaPlayer.PlayerState.Opened) {
+            if (mediaPlayer!!.state != veg.mediaplayer.sdk.MediaPlayer.PlayerState.Closed) {
                 mediaPlayer!!.Close()
             }
         }
@@ -249,9 +252,6 @@ class MediaPlayerService : Service(), AudioManager.OnAudioFocusChangeListener {
         //unregister BroadcastReceivers
         unregisterReceiver(becomingNoisyReceiver)
         unregisterReceiver(playNewAudio)
-
-        //clear cached playlist
-        StorageUtil(applicationContext).clearCachedAudioPlaylist()
     }
     //Becoming noisy
     private val becomingNoisyReceiver = object : BroadcastReceiver() {
@@ -324,7 +324,7 @@ class MediaPlayerService : Service(), AudioManager.OnAudioFocusChangeListener {
 
         mediaSessionManager = getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
         // Create a new MediaSession
-        mediaSession = MediaSession(applicationContext, "AudioPlayer")
+        mediaSession = MediaSessionCompat(applicationContext, "AudioPlayer")
         //Get MediaSessions transport controls
         transportControls = mediaSession!!.controller.transportControls
         //set MediaSession -> ready to receive media commands
@@ -340,17 +340,19 @@ class MediaPlayerService : Service(), AudioManager.OnAudioFocusChangeListener {
         updateMetaData()
 
         // Attach Callback to receive MediaSession updates
-        mediaSession!!.setCallback(object : MediaSession.Callback() {
+        mediaSession!!.setCallback(object : MediaSessionCompat.Callback() {
             // Implement callbacks
             override fun onPlay() {
                 super.onPlay()
-                resumeMedia()
+//                resumeMedia()
+                playMedia()
                 buildNotification(PlaybackStatus.PLAYING)
             }
 
             override fun onPause() {
                 super.onPause()
-                pauseMedia()
+//                pauseMedia()
+                stopMedia()
                 buildNotification(PlaybackStatus.PAUSED)
             }
 
@@ -385,8 +387,8 @@ class MediaPlayerService : Service(), AudioManager.OnAudioFocusChangeListener {
         ) //replace with medias albumArt
         // Update the current metadata
         mediaSession!!.setMetadata(
-            MediaMetadata.Builder()
-                .putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, albumArt)
+            MediaMetadataCompat.Builder()
+                .putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, albumArt)
                 .build()
         )
     }
@@ -432,25 +434,31 @@ class MediaPlayerService : Service(), AudioManager.OnAudioFocusChangeListener {
 
         // Create a new Notification
         val notificationBuilder = if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Notification.Builder(this,channelID)
+            NotificationCompat.Builder(this,channelID)
         } else {
-            @Suppress("DEPRECATION") Notification.Builder(this)
+            @Suppress("DEPRECATION") NotificationCompat.Builder(this)
         }
 
         val prevAction = getNotificationAction(android.R.drawable.ic_media_previous,"previous",playbackAction(3))
         val playPauseActionBuilder = getNotificationAction(notificationAction,"pause",playPauseAction)
         val nextAction = getNotificationAction(android.R.drawable.ic_media_next,"next",playbackAction(2))
-
         notificationBuilder
             .setShowWhen(false)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             // Set the Notification style
-            .setStyle(Notification.MediaStyle()
-                    // Attach our MediaSession token
-                    .setMediaSession(mediaSession!!.sessionToken)
-                    // Show our playback controls in the compact notification view.
-                    .setShowActionsInCompactView(0, 1, 2)
+            .setStyle(MediaNotificationCompat.MediaStyle()
+                // Attach our MediaSession token
+                .setMediaSession(mediaSession!!.sessionToken)
+                // Show our playback controls in the compact notification view.
+                .setShowActionsInCompactView(1)
+                .setCancelButtonIntent( playbackAction(5))
+                .setShowCancelButton(true)
             )
+            .setContentIntent(mediaSession!!.controller.sessionActivity)
+            .setDeleteIntent(playbackAction(5))
+            .setSubText("Subtext Text")
+            .setContentTitle("Content Title")
+            .setContentText("Content Text")
             // Set the large and small icons
             .setLargeIcon(largeIcon)
             .setSmallIcon(android.R.drawable.stat_sys_headset)
@@ -458,13 +466,13 @@ class MediaPlayerService : Service(), AudioManager.OnAudioFocusChangeListener {
             // Add playback actions
             .addAction(prevAction.build())
             .addAction(playPauseActionBuilder.build())
-            .addAction(nextAction.build()) as Notification.Builder
+            .addAction(nextAction.build()) as NotificationCompat.Builder
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            notificationBuilder.setColor(resources.getColor(R.color.colorAccent,null))
+            notificationBuilder.color = resources.getColor(R.color.colorAccent,null)
         } else {
             @Suppress("DEPRECATION")
-            notificationBuilder.setColor(resources.getColor(R.color.colorAccent))
+            notificationBuilder.color = resources.getColor(R.color.colorAccent)
         }
 
 
@@ -475,19 +483,11 @@ class MediaPlayerService : Service(), AudioManager.OnAudioFocusChangeListener {
                 "Default",NotificationManager.IMPORTANCE_LOW))
             notificationBuilder.setChannelId(channelID)
         }
-
-        notificationManager.notify(NOTIFICATION_ID,notificationBuilder.build())
-
-
+        startForeground(NOTIFICATION_ID, notificationBuilder.build())
     }
 
-    private fun getNotificationAction(drawable: Int, title: CharSequence, action: PendingIntent?): Notification.Action.Builder {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            Notification.Action.Builder(Icon.createWithResource(this,drawable),title,action)
-        } else {
-            @Suppress("DEPRECATION")
-            Notification.Action.Builder(drawable,title,action)
-        }
+    private fun getNotificationAction(drawable: Int, title: CharSequence, action: PendingIntent?): NotificationCompat.Action.Builder {
+      return NotificationCompat.Action.Builder(drawable,title,action)
     }
 
     private fun removeNotification() {
