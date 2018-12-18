@@ -10,9 +10,15 @@ import android.os.IBinder
 import android.content.ServiceConnection
 import android.content.Intent
 import android.provider.MediaStore
-import android.content.ContentResolver
 import android.content.pm.PackageManager
 import android.os.Build
+import android.support.v7.widget.GridLayoutManager
+import android.support.v7.widget.RecyclerView
+import android.view.View
+import android.view.ViewGroup
+import android.widget.TextView
+import kotlinx.android.synthetic.main.activity_main.*
+import org.w3c.dom.Text
 
 
 class MainActivity : AppCompatActivity() {
@@ -103,10 +109,34 @@ class MainActivity : AppCompatActivity() {
         checkIfCanLoadAudio()
         //play the first audio in the ArrayList
         if (audioList != null && audioList!!.isNotEmpty()) {
-            playAudio(audioList!![0].data!!)
+//            playAudio(audioList!![0].data!!)
         } else {
             playAudio("https://upload.wikimedia.org/wikipedia/commons/6/6c/Grieg_Lyric_Pieces_Kobold.ogg")
         }
+
+        recycler_view.layoutManager = GridLayoutManager(this,1)
+        recycler_view.adapter = object : RecyclerView.Adapter<MyViewHolder>(){
+            override fun onCreateViewHolder(p0: ViewGroup, p1: Int): MyViewHolder {
+                return MyViewHolder(layoutInflater.inflate(R.layout.my_view_holder,p0,false))
+            }
+
+            override fun getItemCount(): Int = if(audioList != null) audioList!!.size else 0
+
+            override fun onBindViewHolder(p0: MyViewHolder, p1: Int) {
+                p0.albumView.text = audioList!![p1].album
+                p0.artistView.text = audioList!![p1].data
+                p0.titleView.text = audioList!![p1].title
+                p0.rootView.setOnClickListener { playAudio(audioList!![p1].data!!) }
+
+            }
+        }
+    }
+
+    class MyViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        val rootView = itemView
+        val titleView = itemView.findViewById<TextView>(R.id.title_text)
+        val albumView = itemView.findViewById<TextView>(R.id.album_title)
+        val artistView = itemView.findViewById<TextView>(R.id.artist_text)
     }
 
     private fun checkIfCanLoadAudio() {
